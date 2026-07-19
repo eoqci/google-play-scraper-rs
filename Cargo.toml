@@ -1,0 +1,11 @@
+[package]
+name = "googleplay-scraper-rs"
+version = "0.1.0"
+edition = "2024"
+description = "A crate for google play data scraper"
+license = "MIT"
+repository = ""
+readme = "README.md"
+keywords = ["google-play-scraper", "google-play"]
+
+[dependencies]
