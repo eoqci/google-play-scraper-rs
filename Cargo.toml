@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "A crate for google play data scraper"
 license = "MIT"
-repository = ""
+repository = "https://github.com/eoqci/googleplay-scraper-rs"
 readme = "README.md"
 keywords = ["google-play-scraper", "google-play"]
 
