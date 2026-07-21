@@ -78,3 +78,35 @@ pub struct Feature {
     pub title: String,
     pub description: String,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Review {
+    pub id: String,
+    pub user_name: String,
+    pub user_image: String,
+    pub date: String,
+    pub score: u64,
+    pub url: String,
+    pub text: String,
+    pub reply_date: Option<String>,
+    pub reply_text: Option<String>,
+    pub version: Option<String>,
+    pub thumbs_up: u64,
+    // Criterias (ví dụ: Gameplay: 5 sao, Đồ họa: 4 sao) có thể bỏ qua cho gọn,
+    // hoặc bạn tự thêm field nếu cần.
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewsResult {
+    pub data: Vec<Review>,
+    pub next_pagination_token: Option<String>,
+}
+
+// Khai báo enum cho kiểu sort (giống constant.js)
+pub enum SortType {
+    Newest = 2,
+    Rating = 3,
+    Helpfulness = 1,
+}

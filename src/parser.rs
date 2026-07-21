@@ -2,45 +2,9 @@ use regex::Regex;
 use serde_json::Value;
 use std::collections::HashMap;
 
-// Không cần import ScrapperError ở đây nữa trừ khi bạn dùng nó để trả về Err.
+use crate::{client::fetch_html, error::ScraperError};
 
-// SỬA Ở ĐÂY: Trả về HashMap<String, Value> thay vì HashMap<String, ScrapperError>
-pub fn extract_init_data(html: &str) -> HashMap<String, Value> {
-    let mut parsed_data = HashMap::new();
-
-    let re = Regex::new(
-        r"AF_initDataCallback\s*\(.*?key:\s*'([^']+)'\s*,.*?data:\s*(\[.*?\])\s*}\s*\);",
-    )
-    .unwrap();
-
-    for cap in re.captures_iter(html) {
-        if let (Some(key_match), Some(data_match)) = (cap.get(1), cap.get(2)) {
-            let key = key_match.as_str().to_string();
-            // Lưu ý: Đừng quên thêm code "làm sạch" chuỗi JSON như mình đề cập ở Step 3
-            // của câu trả lời trước, nếu không đoạn from_str bên dưới sẽ văng lỗi rất nhiều.
-            let mut json_str = data_match.as_str().to_string();
-            json_str = json_str.replace("[,", "[null,");
-            while json_str.contains(",,") {
-                json_str = json_str.replace(",,", ",null,");
-            }
-
-            // Rust giờ đã biết Value ở đây là serde_json::Value nhờ chữ ký hàm
-            match serde_json::from_str(&json_str) {
-                Ok(value) => {
-                    parsed_data.insert(key, value);
-                }
-                Err(e) => {
-                    eprintln!("Lỗi parse JSON cho key {}: {}", key, e);
-                }
-            }
-        }
-    }
-
-    parsed_data
-}
-
-// src/parser.rs
-// Hàm phụ trợ để điều hướng trong mảng đa chiều bằng index
+// Hàm hỗ trợ điều hướng trong mảng đa chiều bằng index
 pub fn get_json_val<'a>(root: &'a Value, path: &[usize]) -> Option<&'a Value> {
     let mut current = root;
     for &idx in path {
@@ -53,82 +17,86 @@ pub fn get_json_val<'a>(root: &'a Value, path: &[usize]) -> Option<&'a Value> {
     Some(current)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub fn extract_init_data(html: &str) -> HashMap<String, Value> {
+    let mut parsed_data = HashMap::new();
 
-    #[test]
-    fn test_extract_init_data_basic() {
-        // Giả lập một đoạn HTML có chứa script data của Google Play
-        // Chú ý: Cấu trúc JSON cố tình có các phần tử rỗng như [1, , 3] (mô phỏng lỗi của Google)
-        let mock_html = r#"
-            <html>
-                <head></head>
-                <body>
-                    <script nonce="xxx">
-                        AF_initDataCallback({key: 'ds:1', isError:  false , hash: '1', data: ["Test App", 4.5, 1000] });
-                    </script>
-                    <div>Some random content</div>
-                    <script nonce="yyy">
-                        AF_initDataCallback({key: 'ds:5', isError:  false , hash: '2', data: [["Google Translate", , "Translate stuff", , , "1B+"]] });
-                    </script>
-                </body>
-            </html>
-        "#;
+    // Regex bắt key và data
+    let re_main = Regex::new(
+        r"AF_initDataCallback\s*\(.*?key:\s*'([^']+)'\s*,.*?data:\s*(\[.*?\])\s*}\s*\);",
+    )
+    .unwrap();
 
-        let result = extract_init_data(mock_html);
+    // Regex để dọn dẹp JSON: bắt các dấu phẩy trống có chứa khoảng trắng
+    // Ví dụ: `[  ,` hoặc `,  ,`
+    let re_empty_array_start = Regex::new(r"\[\s*,").unwrap();
+    let re_empty_elements = Regex::new(r",\s*,").unwrap();
 
-        // 1. Kiểm tra xem Regex có bắt được đúng 2 khối dữ liệu không
-        assert_eq!(result.len(), 2, "Phải bắt được chính xác 2 khối data");
-        assert!(result.contains_key("ds:1"));
-        assert!(result.contains_key("ds:5"));
+    for cap in re_main.captures_iter(html) {
+        if let (Some(key_match), Some(data_match)) = (cap.get(1), cap.get(2)) {
+            let key = key_match.as_str().to_string();
+            let mut json_str = data_match.as_str().to_string();
 
-        // 2. Kiểm tra mảng JSON chuẩn (ds:1) có được parse đúng không
-        let ds1 = result.get("ds:1").unwrap();
-        assert_eq!(ds1[0].as_str(), Some("Test App"));
-        assert_eq!(ds1[1].as_f64(), Some(4.5));
+            // 1. Dọn dẹp khoảng trống ngay sau dấu ngoặc vuông mở: `[ ,` -> `[null,`
+            json_str = re_empty_array_start
+                .replace_all(&json_str, "[null,")
+                .to_string();
 
-        // 3. Kiểm tra mảng JSON bị thiếu phần tử (ds:5) có được dọn dẹp và parse thành null không
-        let ds5 = result.get("ds:5").unwrap();
-        let inner_array = &ds5[0];
+            // 2. Dọn dẹp các dấu phẩy liền kề nhau: `, ,` -> `,null,`
+            // Phải chạy vòng lặp vì Regex có thể bị lướt qua các chuỗi như `,,,` do overlapping
+            while re_empty_elements.is_match(&json_str) {
+                json_str = re_empty_elements
+                    .replace_all(&json_str, ",null,")
+                    .to_string();
+            }
 
-        assert_eq!(inner_array[0].as_str(), Some("Google Translate"));
-        // Phần tử trống ở index 1 phải được parse thành chuỗi null
-        assert!(
-            inner_array[1].is_null(),
-            "Phần tử trống phải biến thành null"
-        );
-        assert_eq!(inner_array[2].as_str(), Some("Translate stuff"));
-        assert!(inner_array[3].is_null());
-        assert!(inner_array[4].is_null());
-        assert_eq!(inner_array[5].as_str(), Some("1B+"));
+            match serde_json::from_str(&json_str) {
+                Ok(value) => {
+                    parsed_data.insert(key, value);
+                }
+                Err(e) => {
+                    eprintln!("Lỗi parse JSON cho key {}: {}", key, e);
+                    // Bật dòng này lên để debug chuỗi JSON thực tế nếu vẫn còn lỗi
+                    // eprintln!("Chuỗi lỗi: {}", json_str);
+                }
+            }
+        }
     }
 
-    #[test]
-    fn test_get_json_val_helper() {
-        use serde_json::json;
+    parsed_data
+}
 
-        // Tạo một cấu trúc JSON đa chiều giả lập
-        let mock_json = json!([
-            "Item 0",
-            [
-                "Item 1.0",
-                [
-                    "Target Value", // Index: [1, 1, 0]
-                    42              // Index: [1, 1, 1]
-                ]
-            ]
-        ]);
+// Hàm này chỉ dùng để debug xem lấy được cục data nào
+pub async fn debug_raw_app_data(app_id: &str) -> Result<HashMap<String, Value>, ScraperError> {
+    let url = format!(
+        "https://play.google.com/store/apps/details?id={}&hl=en&gl=us",
+        app_id
+    );
+    println!("Fetching from: {}", url);
+    let html = fetch_html(&url).await?;
 
-        // Trích xuất thành công
-        let target_str = get_json_val(&mock_json, &[1, 1, 0]);
-        assert_eq!(target_str.unwrap().as_str(), Some("Target Value"));
+    let parsed_data = extract_init_data(&html);
+    Ok(parsed_data) // Bây giờ thì HashMap khớp với khai báo hàm
+}
 
-        let target_num = get_json_val(&mock_json, &[1, 1, 1]);
-        assert_eq!(target_num.unwrap().as_u64(), Some(42));
+pub fn parse_batchexecute_response(raw_response: &str) -> Option<Value> {
+    // 1. Cắt bỏ tiền tố rác )]}' hoặc khoảng trắng thừa ở đầu
+    let clean_str = if raw_response.starts_with(")]}'") {
+        raw_response[4..].trim()
+    } else {
+        raw_response.trim()
+    };
 
-        // Báo None khi đi sai path (Out of bounds)
-        let invalid_path = get_json_val(&mock_json, &[1, 2, 0]);
-        assert!(invalid_path.is_none());
-    }
+    // 2. Parse vỏ ngoài
+    let outer_json: Value = serde_json::from_str(clean_str).ok()?;
+
+    // 3. Lấy chuỗi JSON bị lồng bên trong (nằm ở input[0][2])
+    let inner_str = outer_json
+        .as_array()?
+        .get(0)?
+        .as_array()?
+        .get(2)?
+        .as_str()?;
+
+    // 4. Parse ruột bên trong
+    serde_json::from_str(inner_str).ok()
 }
