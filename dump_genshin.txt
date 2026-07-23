@@ -1,4 +1,0 @@
-Bắt đầu fetch data cho com.miHoYo.GenshinImpact...
-Fetching from: https://play.google.com/store/apps/details?id=com.miHoYo.GenshinImpact&hl=en&gl=us
-✅ Đã parse thành công các khối data: []
-❌ Không tìm thấy khối ds:5. Google có thể đã đổi sang key khác (như ds:4).

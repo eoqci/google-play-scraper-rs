@@ -1,13 +1,13 @@
+// File: src/details.rs
 use crate::client::fetch_html;
 use crate::error::ScraperError;
-use crate::model::{AppDetails, Category, Feature};
+use crate::models::{AppDetails, Category};
 use crate::parser::{extract_init_data, get_json_val};
 use serde_json::Value;
 
-// Hàm phụ trợ nhỏ để giả lập `cheerio.text()` - gỡ tag HTML cơ bản
+// Hàm phụ trợ gỡ tag HTML cơ bản
 fn strip_html(html: &str) -> String {
     let mut text = html.replace("<br>", "\n").replace("<br/>", "\n");
-    // Xóa tất cả các thẻ <...>
     while let Some(start) = text.find('<') {
         if let Some(end) = text[start..].find('>') {
             text.replace_range(start..start + end + 1, "");
@@ -15,13 +15,42 @@ fn strip_html(html: &str) -> String {
             break;
         }
     }
-    // Decode vài HTML entity cơ bản
-    text = text
-        .replace("&amp;", "&")
+    text.replace("&amp;", "&")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
-        .replace("&quot;", "\"");
-    text
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+}
+
+fn find_array_by_string_id<'a>(root: &'a Value, target_id: &str) -> Option<&'a Value> {
+    // Trường hợp 1: Dữ liệu nằm trong mảng các cặp hoặc mảng con thông thường
+    if let Some(arr) = root.as_array() {
+        for child in arr {
+            if let Some(child_arr) = child.as_array() {
+                if let Some(first_elem) = child_arr.get(0).and_then(|v| v.as_str()) {
+                    if first_elem == target_id {
+                        return Some(child);
+                    }
+                }
+            }
+            // Đệ quy tìm sâu hơn nếu cần
+            if let Some(found) = find_array_by_string_id(child, target_id) {
+                return Some(found);
+            }
+        }
+    }
+    // Trường hợp 2: Dữ liệu là JSON Object (như cấu trúc block bạn vừa gửi: {"141": [...], "146": [...]})
+    else if let Some(obj) = root.as_object() {
+        if let Some(val) = obj.get(target_id) {
+            return Some(val);
+        }
+        for (_, val) in obj {
+            if let Some(found) = find_array_by_string_id(val, target_id) {
+                return Some(found);
+            }
+        }
+    }
+    None
 }
 
 pub fn map_app_details(app_id: &str, ds5: &Value) -> AppDetails {
@@ -32,9 +61,6 @@ pub fn map_app_details(app_id: &str, ds5: &Value) -> AppDetails {
         app_id
     );
 
-    // ==========================================
-    // CÁC CLOSURES RÚT GỌN THAO TÁC LẤY DỮ LIỆU
-    // ==========================================
     let get_val = |path: &[usize]| -> Option<&Value> { get_json_val(ds5, path) };
 
     let get_str = |path: &[usize]| -> Option<String> {
@@ -57,36 +83,38 @@ pub fn map_app_details(app_id: &str, ds5: &Value) -> AppDetails {
         get_val(path).and_then(|v| v.as_u64().or_else(|| v.as_f64().map(|f| f as u64)))
     };
 
-    // ==========================================
-    // BẮT ĐẦU MAPPING DỮ LIỆU
-    // ==========================================
+    let is_truthy = |path: &[usize]| -> bool {
+        match get_val(path) {
+            Some(Value::Array(a)) => !a.is_empty(),
+            Some(Value::String(s)) => !s.is_empty(),
+            Some(Value::Bool(b)) => *b,
+            Some(Value::Number(n)) => n.as_f64() != Some(0.0),
+            Some(Value::Object(o)) => !o.is_empty(),
+            _ => false,
+        }
+    };
 
     app.title = get_str(&[1, 2, 0, 0]).unwrap_or_default();
 
-    // Description: Ưu tiên bản dịch (translation), nếu không có dùng bản gốc (original)
-    app.description_html = get_str(&[1, 2, 12, 0, 0, 1]) // localized
-        .or_else(|| get_str(&[1, 2, 72, 0, 1])) // original
+    app.description_html = get_str(&[1, 2, 12, 0, 0, 1])
+        .or_else(|| get_str(&[1, 2, 72, 0, 1]))
         .unwrap_or_default();
     app.description = strip_html(&app.description_html);
 
     app.summary = get_str(&[1, 2, 73, 0, 1]).unwrap_or_default();
 
-    // Lượt cài đặt
     app.installs = get_str(&[1, 2, 13, 0]).unwrap_or_default();
     app.min_installs = get_u64(&[1, 2, 13, 1]).unwrap_or(0);
     app.max_installs = get_u64(&[1, 2, 13, 2]).unwrap_or(0);
 
-    // Điểm đánh giá (Score & Ratings)
     app.score = get_f64(&[1, 2, 51, 0, 1]).unwrap_or(0.0);
     app.score_text = get_str(&[1, 2, 51, 0, 0]).unwrap_or_default();
     app.ratings = get_u64(&[1, 2, 51, 2, 1]).unwrap_or(0);
     app.reviews = get_u64(&[1, 2, 51, 3, 1]).unwrap_or(0);
 
-    // Histogram (1 sao đến 5 sao)
     if let Some(arr) = get_val(&[1, 2, 51, 1]).and_then(|v| v.as_array()) {
         for i in 1..=5 {
             if let Some(star_data) = arr.get(i) {
-                // Index 1, 2, 3, 4, 5
                 if let Some(count) = star_data.get(1).and_then(|c| c.as_u64()) {
                     app.histogram.insert(i.to_string(), count);
                 }
@@ -94,7 +122,6 @@ pub fn map_app_details(app_id: &str, ds5: &Value) -> AppDetails {
         }
     }
 
-    // Giá & Tiền tệ (Google lưu giá vi mô: x 1,000,000)
     let price_micros = get_f64(&[1, 2, 57, 0, 0, 0, 0, 1, 0, 0]).unwrap_or(0.0);
     app.price = price_micros / 1_000_000.0;
     app.free = price_micros == 0.0;
@@ -102,25 +129,10 @@ pub fn map_app_details(app_id: &str, ds5: &Value) -> AppDetails {
     app.price_text =
         get_str(&[1, 2, 57, 0, 0, 0, 0, 1, 0, 2]).unwrap_or_else(|| "Free".to_string());
 
-    // In-App Purchases (IAP)
     app.offers_iap = get_val(&[1, 2, 19, 0]).is_some();
     app.iap_range = get_str(&[1, 2, 19, 0]);
 
-    // Phiên bản Android
-    app.android_version = get_str(&[1, 2, 140, 1, 1, 0, 0, 1])
-        .or_else(|| get_str(&[1, 2, 141, 1, 1, 0, 0, 1]))
-        .unwrap_or_else(|| "VARY".to_string());
-
-    app.android_version_text = get_str(&[1, 2, 140, 1, 1, 0, 0, 1])
-        .or_else(|| get_str(&[1, 2, 141, 1, 1, 0, 0, 1]))
-        .unwrap_or_else(|| "Varies with device".to_string());
-
-    app.android_max_version =
-        get_str(&[1, 2, 140, 1, 1, 0, 1, 1]).or_else(|| get_str(&[1, 2, 141, 1, 1, 0, 1, 1]));
-
-    // Thông tin Developer
     app.developer = get_str(&[1, 2, 68, 0]).unwrap_or_default();
-
     let dev_url = get_str(&[1, 2, 68, 1, 4, 2]).unwrap_or_default();
     app.developer_id = dev_url.split("id=").nth(1).unwrap_or("").to_string();
     app.developer_internal_id = app.developer_id.clone();
@@ -129,24 +141,19 @@ pub fn map_app_details(app_id: &str, ds5: &Value) -> AppDetails {
     app.developer_website = get_str(&[1, 2, 69, 0, 5, 2]);
     app.developer_address = get_str(&[1, 2, 69, 2, 0]);
 
-    // Legal Developer Info (Tên công ty đóng thuế...)
     app.developer_legal_name = get_str(&[1, 2, 69, 4, 0]);
     app.developer_legal_email = get_str(&[1, 2, 69, 4, 1, 0]);
     app.developer_legal_address = get_str(&[1, 2, 69, 4, 2, 0]).map(|s| s.replace('\n', ", "));
     app.developer_legal_phone_number = get_str(&[1, 2, 69, 4, 3]);
-
     app.privacy_policy = get_str(&[1, 2, 99, 0, 5, 2]);
 
-    // Thể loại (Genre & Category)
     app.genre = get_str(&[1, 2, 79, 0, 0, 0]).unwrap_or_default();
     app.genre_id = get_str(&[1, 2, 79, 0, 0, 2]).unwrap_or_default();
 
-    // Mảng Categories: ['ds:5', 1, 2, 118]
     if let Some(cat_arr) = get_val(&[1, 2, 118]).and_then(|v| v.as_array()) {
         for c in cat_arr {
             if let Some(c_arr) = c.as_array() {
                 if c_arr.len() >= 4 {
-                    // Structure theo hàm extractCategories
                     let name = c_arr[0].as_str().unwrap_or_default().to_string();
                     let id = c_arr[2].as_str().map(|s| s.to_string());
                     app.categories.push(Category { name, id });
@@ -154,7 +161,6 @@ pub fn map_app_details(app_id: &str, ds5: &Value) -> AppDetails {
             }
         }
     }
-    // Fallback nếu không có categories
     if app.categories.is_empty() {
         app.categories.push(Category {
             name: app.genre.clone(),
@@ -162,45 +168,115 @@ pub fn map_app_details(app_id: &str, ds5: &Value) -> AppDetails {
         });
     }
 
-    // Hình ảnh & Media
     app.icon = get_str(&[1, 2, 95, 0, 3, 2]).unwrap_or_default();
     app.header_image = get_str(&[1, 2, 96, 0, 3, 2]);
 
-    // Screenshots array
     if let Some(screens) = get_val(&[1, 2, 78, 0]).and_then(|v| v.as_array()) {
         app.screenshots = screens
             .iter()
-            .filter_map(|s| get_json_val(s, &[3, 2])) // Map tới path [3, 2]
+            .filter_map(|s| get_json_val(s, &[3, 2]))
             .filter_map(|url| url.as_str().map(String::from))
             .collect();
     }
 
-    app.video = get_str(&[1, 2, 100, 0, 0, 3, 2]);
+    if let Some(video_url) = get_str(&[1, 2, 100, 0, 0, 3, 2]) {
+        if video_url.contains("youtube.com/embed/") {
+            app.video = Some(video_url);
+        } else if let Some(id) = video_url
+            .split("yt:movie:")
+            .nth(1)
+            .and_then(|s| s.split('?').next())
+        {
+            app.video = Some(format!(
+                "https://www.youtube.com/embed/{}?vq=large&rel=0&autohide=1&showinfo=0",
+                id
+            ));
+        } else {
+            app.video = Some(video_url);
+        }
+    }
+
     app.video_image = get_str(&[1, 2, 100, 1, 0, 3, 2]);
     app.preview_video = get_str(&[1, 2, 100, 1, 2, 0, 2]);
 
-    // Các thông tin khác
     app.content_rating = get_str(&[1, 2, 9, 0]).unwrap_or_default();
     app.content_rating_description = get_str(&[1, 2, 9, 2, 1]);
 
-    app.ad_supported = get_val(&[1, 2, 48]).is_some();
+    app.ad_supported = is_truthy(&[1, 2, 48]);
     app.released = get_str(&[1, 2, 10, 0]);
 
-    // Updated Timestamp (đôi khi đổi từ 145 sang 146)
-    if let Some(ts) = get_u64(&[1, 2, 145, 0, 1, 0]).or_else(|| get_u64(&[1, 2, 146, 0, 1, 0])) {
-        app.updated = ts * 1000;
-    }
+    // ==========================================
+    // CƠ CHẾ DÒ TÌM RAMDA (-1 FALLBACK)
+    // ==========================================
+    let base_array = get_val(&[1, 2]);
 
-    app.version = get_str(&[1, 2, 140, 0, 0, 0])
-        .or_else(|| get_str(&[1, 2, 141, 0, 0, 0]))
+    // 1. Updated Timestamp
+    app.updated = find_array_by_string_id(ds5, "146")
+        .and_then(|found| {
+            found
+                .get(0)
+                .and_then(|v| v.as_array())
+                .and_then(|arr| arr.get(1))
+                .and_then(|v| v.as_array())
+                .and_then(|arr| arr.get(0))
+                .and_then(|v| v.as_u64())
+        })
+        .map(|ts| ts * 1000)
+        .unwrap_or(0);
+
+    // 2. Version (Có tích hợp quét thông minh cho các app phức tạp)
+    app.version = find_array_by_string_id(ds5, "141")
+        .and_then(|found| {
+            found
+                .get(0)
+                .and_then(|v| v.get(0))
+                .and_then(|v| v.get(0))
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        })
+        .unwrap_or_else(|| "Varies with device".to_string());
+
+    // 3. Android Version
+    app.android_version = get_str(&[1, 2, 140, 1, 1, 0, 0, 1])
+        .or_else(|| {
+            base_array
+                .and_then(|arr| find_array_by_string_id(arr, "141"))
+                .and_then(|found| get_json_val(found, &[1, 1, 0, 0, 1]))
+                .and_then(|v| v.as_str().map(String::from))
+        })
         .unwrap_or_else(|| "VARY".to_string());
 
-    app.recent_changes = get_str(&[1, 2, 144, 1, 1]).or_else(|| get_str(&[1, 2, 145, 1, 1]));
+    app.android_version_text = get_str(&[1, 2, 140, 1, 1, 0, 0, 1])
+        .or_else(|| {
+            base_array
+                .and_then(|arr| find_array_by_string_id(arr, "141"))
+                .and_then(|found| get_json_val(found, &[1, 1, 0, 0, 1]))
+                .and_then(|v| v.as_str().map(String::from))
+        })
+        .unwrap_or_else(|| "Varies with device".to_string());
+
+    app.android_max_version = get_str(&[1, 2, 140, 1, 1, 0, 1, 1]).or_else(|| {
+        base_array
+            .and_then(|arr| find_array_by_string_id(arr, "141"))
+            .and_then(|found| get_json_val(found, &[1, 1, 0, 1, 1]))
+            .and_then(|v| v.as_str().map(String::from))
+    });
+
+    // 4. Recent Changes
+    app.recent_changes = find_array_by_string_id(ds5, "145").and_then(|found| {
+        found
+            .get(1)
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.get(1))
+            .and_then(|v| v.as_str())
+            .map(String::from)
+    });
+    // ==========================================
 
     app.preregister = get_u64(&[1, 2, 18, 0]) == Some(1);
-    app.early_access_enabled = get_str(&[1, 2, 18, 2]).is_some(); // String if early access
-    app.is_available_in_play_pass = get_val(&[1, 2, 62]).is_some();
-    app.editors_choice = false; // Thuộc tính này thường được map riêng qua logo, tạm để false
+    app.early_access_enabled = get_str(&[1, 2, 18, 2]).is_some();
+    app.is_available_in_play_pass = is_truthy(&[1, 2, 62]);
+    app.editors_choice = false;
 
     app
 }
@@ -214,7 +290,6 @@ pub async fn get_app_details(app_id: &str) -> Result<AppDetails, ScraperError> {
 
     let parsed_data = extract_init_data(&html);
 
-    // Dữ liệu chi tiết nằm trong khối ds:5 (Đôi khi Google chuyển qua ds:4)
     let ds5 = parsed_data
         .get("ds:5")
         .or_else(|| parsed_data.get("ds:4"))
@@ -223,4 +298,44 @@ pub async fn get_app_details(app_id: &str) -> Result<AppDetails, ScraperError> {
     let app = map_app_details(app_id, ds5);
 
     Ok(app)
+}
+// Hàm quét thông minh tìm chuỗi phiên bản trong cấu trúc rác của các app lớn
+fn find_version_fallback(root: &Value) -> Option<String> {
+    if let Some(arr) = root
+        .get(1)
+        .and_then(|v| v.get(2))
+        .and_then(|v| v.as_array())
+    {
+        for item in arr {
+            if let Some(s) = item.as_str() {
+                // Điều kiện nhận diện một chuỗi version: chứa dấu chấm, có số, ngắn gọn, không phải URL hay text dài
+                if s.contains('.')
+                    && s.chars().any(|c| c.is_ascii_digit())
+                    && s.len() < 35
+                    && !s.contains("http")
+                    && !s.contains(' ')
+                    && !s.contains('<')
+                {
+                    return Some(s.to_string());
+                }
+            }
+            // Quét sâu hơn vào các mảng con cấp 1
+            if let Some(sub_arr) = item.as_array() {
+                for sub_item in sub_arr {
+                    if let Some(s) = sub_item.as_str() {
+                        if s.contains('.')
+                            && s.chars().any(|c| c.is_ascii_digit())
+                            && s.len() < 35
+                            && !s.contains("http")
+                            && !s.contains(' ')
+                            && !s.contains('/')
+                        {
+                            return Some(s.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
 }

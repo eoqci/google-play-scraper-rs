@@ -1,12 +1,11 @@
 use crate::client::fetch_batchexecute;
 use crate::error::ScraperError;
-use crate::model::{Review, ReviewsResult, SortType};
+use crate::models::{Review, ReviewsResult, SortType};
 use crate::parser::{get_json_val, parse_batchexecute_response};
 use serde_json::Value;
 
-// Giống hàm getBodyForRequests trong reviews.js
+// Trong src/reviews.rs
 fn build_reviews_body(app_id: &str, sort: i32, count: usize, token: Option<&str>) -> String {
-    // Nếu có token thì chèn token vào chuỗi, nếu không thì dùng `null`
     let token_str = match token {
         Some(t) => format!("\\\"{}\\\"", t),
         None => "null".to_string(),
@@ -17,34 +16,24 @@ fn build_reviews_body(app_id: &str, sort: i32, count: usize, token: Option<&str>
         sort, count, token_str, app_id
     );
 
-    // Encode URL nhẹ nhàng (thay " bằng %22, [ thành %5B, v.v...)
-    // Trong JS họ hardcode encode luôn: f.req=%5B%5B%5B%22UsvDTd%22%2C%22...
-    // Ở Rust, ta dùng thư viện `url` để encode cho an toàn.
-
-    use url::form_urlencoded;
     let req_value = format!("[[[\"UsvDTd\",\"{}\",null,\"generic\"]]]", inner_req);
 
-    form_urlencoded::Serializer::new(String::new())
-        .append_pair("f.req", &req_value)
-        .finish()
+    // Bắt buộc phải encode chuẩn URL encoding giống hệt thư viện NodeJS
+    format!("f.req={}", urlencoding::encode(&req_value))
 }
-// Hàm parse thời gian cực dị của Google (Mảng 2 phần tử giây và nano giây)
+
 fn parse_date(date_arr: Option<&Value>) -> String {
     if let Some(arr) = date_arr.and_then(|v| v.as_array()) {
         if let (Some(secs), Some(nanos)) = (arr.get(0), arr.get(1)) {
             let s = secs.as_u64().unwrap_or(0);
             let n_str = format!("{:03}", nanos.as_u64().unwrap_or(0));
-            // Cắt 3 số đầu của nano ghép vào giây để thành miliseconds
-            let ms = format!("{}{}", s, &n_str[0..3]);
-            return ms; // Bạn có thể dùng crate `chrono` để convert sang chuẩn ISO8601 nếu thích
+            return format!("{}{}", s, &n_str[0..3]);
         }
     }
     String::new()
 }
 
 fn map_review(app_id: &str, val: &Value) -> Option<Review> {
-    // val chính là mảng chứa 1 bình luận
-
     let id = get_json_val(val, &[0])?.as_str()?.to_string();
     let user_name = get_json_val(val, &[1, 0])
         .and_then(|v| v.as_str())
@@ -100,21 +89,16 @@ pub async fn get_reviews(
     count: usize,
     pagination_token: Option<&str>,
 ) -> Result<ReviewsResult, ScraperError> {
-    // 1. Tạo body
     let body = build_reviews_body(app_id, sort as i32, count, pagination_token);
 
-    // 2. Fetch từ API
-    let url = "https://play.google.com/_/PlayStoreUi/data/batchexecute?rpcids=qnKhOb&f.sid=-697906427155521722&hl=en&gl=us";
+    let url = "https://play.google.com/_/PlayStoreUi/data/batchexecute?rpcids=UsvDTd&f.sid=-697906427155521722&hl=en&gl=us";
     let raw_resp = fetch_batchexecute(url, &body).await?;
 
-    // 3. Lột vỏ )]}'
     let inner_json = parse_batchexecute_response(&raw_resp).ok_or(ScraperError::ParseError)?;
 
-    // 4. Móc data
     let mut reviews = Vec::new();
     let mut next_token = None;
 
-    // Trong mảng trả về, [0] chứa danh sách review, [1][1] chứa token trang tiếp theo (MAPPINGS trong js)
     if let Some(reviews_array) = get_json_val(&inner_json, &[0]).and_then(|v| v.as_array()) {
         for rev_val in reviews_array {
             if let Some(review) = map_review(app_id, rev_val) {
