@@ -1,4 +1,3 @@
-// File: src/details.rs
 use crate::client::fetch_html;
 use crate::error::ScraperError;
 use crate::models::{AppDetails, Category};
@@ -225,14 +224,18 @@ pub fn map_app_details(app_id: &str, ds5: &Value) -> AppDetails {
         .unwrap_or(0);
 
     // 2. Version (Có tích hợp quét thông minh cho các app phức tạp)
-    app.version = find_array_by_string_id(ds5, "141")
-        .and_then(|found| {
-            found
-                .get(0)
-                .and_then(|v| v.get(0))
-                .and_then(|v| v.get(0))
-                .and_then(|v| v.as_str())
-                .map(String::from)
+    app.version = get_str(&[1, 2, 140, 0, 0, 0])
+        // CHÌA KHÓA Ở ĐÂY: Nếu đọc ra VARY hoặc Varies with device -> Hủy kết quả, ép chạy xuống or_else
+        .filter(|s| s != "VARY" && s != "Varies with device")
+        .or_else(|| {
+            find_array_by_string_id(ds5, "141").and_then(|found| {
+                found
+                    .get(0)
+                    .and_then(|v| v.get(0))
+                    .and_then(|v| v.get(0))
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+            })
         })
         .unwrap_or_else(|| "Varies with device".to_string());
 
@@ -299,43 +302,43 @@ pub async fn get_app_details(app_id: &str) -> Result<AppDetails, ScraperError> {
 
     Ok(app)
 }
-// Hàm quét thông minh tìm chuỗi phiên bản trong cấu trúc rác của các app lớn
-fn find_version_fallback(root: &Value) -> Option<String> {
-    if let Some(arr) = root
-        .get(1)
-        .and_then(|v| v.get(2))
-        .and_then(|v| v.as_array())
-    {
-        for item in arr {
-            if let Some(s) = item.as_str() {
-                // Điều kiện nhận diện một chuỗi version: chứa dấu chấm, có số, ngắn gọn, không phải URL hay text dài
-                if s.contains('.')
-                    && s.chars().any(|c| c.is_ascii_digit())
-                    && s.len() < 35
-                    && !s.contains("http")
-                    && !s.contains(' ')
-                    && !s.contains('<')
-                {
-                    return Some(s.to_string());
-                }
-            }
-            // Quét sâu hơn vào các mảng con cấp 1
-            if let Some(sub_arr) = item.as_array() {
-                for sub_item in sub_arr {
-                    if let Some(s) = sub_item.as_str() {
-                        if s.contains('.')
-                            && s.chars().any(|c| c.is_ascii_digit())
-                            && s.len() < 35
-                            && !s.contains("http")
-                            && !s.contains(' ')
-                            && !s.contains('/')
-                        {
-                            return Some(s.to_string());
-                        }
-                    }
-                }
-            }
-        }
-    }
-    None
-}
+// // Hàm quét thông minh tìm chuỗi phiên bản trong cấu trúc rác của các app lớn
+// fn find_version_fallback(root: &Value) -> Option<String> {
+//     if let Some(arr) = root
+//         .get(1)
+//         .and_then(|v| v.get(2))
+//         .and_then(|v| v.as_array())
+//     {
+//         for item in arr {
+//             if let Some(s) = item.as_str() {
+//                 // Điều kiện nhận diện một chuỗi version: chứa dấu chấm, có số, ngắn gọn, không phải URL hay text dài
+//                 if s.contains('.')
+//                     && s.chars().any(|c| c.is_ascii_digit())
+//                     && s.len() < 35
+//                     && !s.contains("http")
+//                     && !s.contains(' ')
+//                     && !s.contains('<')
+//                 {
+//                     return Some(s.to_string());
+//                 }
+//             }
+//             // Quét sâu hơn vào các mảng con cấp 1
+//             if let Some(sub_arr) = item.as_array() {
+//                 for sub_item in sub_arr {
+//                     if let Some(s) = sub_item.as_str() {
+//                         if s.contains('.')
+//                             && s.chars().any(|c| c.is_ascii_digit())
+//                             && s.len() < 35
+//                             && !s.contains("http")
+//                             && !s.contains(' ')
+//                             && !s.contains('/')
+//                         {
+//                             return Some(s.to_string());
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+//     }
+//     None
+// }

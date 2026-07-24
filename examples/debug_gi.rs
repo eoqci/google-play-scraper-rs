@@ -16,7 +16,8 @@ struct ExportData {
 
 #[tokio::main]
 async fn main() {
-    let app_id = "com.miHoYo.GenshinImpact";
+    // let app_id = "com.miHoYo.GenshinImpact";
+    let app_id = "com.chillyroom.zhmr.gp";
 
     println!("🚀 Bắt đầu cào dữ liệu cho: {}", app_id);
 

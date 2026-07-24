@@ -54,7 +54,7 @@ pub fn extract_init_data(html: &str) -> HashMap<String, Value> {
                     // Cắt bỏ phần đuôi rác nếu regex lỡ bắt quá đà
                     if let Some(idx) = json_str.rfind("];") {
                         json_str.truncate(idx + 1);
-                    } else if let Some(idx) = json_str.rfind("}]") {
+                    } else if let Some(_idx) = json_str.rfind("}]") {
                         // tìm dấu ngoặc vuông cuối cùng
                         if let Some(bracket_idx) = json_str.rfind(']') {
                             json_str.truncate(bracket_idx + 1);
@@ -81,12 +81,27 @@ pub fn parse_batchexecute_response(raw_response: &str) -> Option<Value> {
 
     let outer_json: Value = serde_json::from_str(clean_str).ok()?;
 
-    let inner_str = outer_json
-        .as_array()?
-        .get(0)?
-        .as_array()?
-        .get(2)?
-        .as_str()?;
+    // Hàm đệ quy quét tìm chuỗi JSON bị lồng bên trong (đặc sản của batchexecute)
+    fn find_nested_json_string(root: &Value) -> Option<String> {
+        if let Some(arr) = root.as_array() {
+            for item in arr {
+                if let Some(s) = item.as_str() {
+                    // Chuỗi JSON lồng thường bắt đầu bằng '[' và dài
+                    if s.starts_with('[') && s.len() > 100 {
+                        return Some(s.to_string());
+                    }
+                }
+                if let Some(found) = find_nested_json_string(item) {
+                    return Some(found);
+                }
+            }
+        }
+        None
+    }
 
-    serde_json::from_str(inner_str).ok()
+    if let Some(inner_str) = find_nested_json_string(&outer_json) {
+        return serde_json::from_str(&inner_str).ok();
+    }
+
+    None
 }
