@@ -96,8 +96,8 @@ pub fn extract_init_data(html: &str) -> HashMap<String, Value> {
     let re_empty_elements = Regex::new(r",\s*,").unwrap();
     for element in document.select(&script_selector) {
         let script_text = element.inner_html();
-        if script_text.contains("AF_initDataCallback") {
-            if let Some(key_cap) = key_regex.captures(&script_text) {
+        if script_text.contains("AF_initDataCallback")
+            && let Some(key_cap) = key_regex.captures(&script_text) {
                 // Attempt to capture the JSON array from the script tag.
                 if let Some(data_cap) = data_regex.captures(&script_text) {
                     let key = key_cap.get(1).unwrap().as_str().to_string();
@@ -125,7 +125,6 @@ pub fn extract_init_data(html: &str) -> HashMap<String, Value> {
                     }
                 }
             }
-        }
     }
     parsed_data
 }

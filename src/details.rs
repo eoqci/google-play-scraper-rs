@@ -25,12 +25,11 @@ fn find_array_by_string_id<'a>(root: &'a Value, target_id: &str) -> Option<&'a V
     // Case 1: Data is in a vec of pairs or a regular subvec
     if let Some(arr) = root.as_array() {
         for child in arr {
-            if let Some(child_arr) = child.as_array() {
-                if let Some(first_elem) = child_arr.get(0).and_then(|v| v.as_str()) {
-                    if first_elem == target_id {
-                        return Some(child);
-                    }
-                }
+            if let Some(child_arr) = child.as_array()
+                && let Some(first_elem) = child_arr.first().and_then(|v| v.as_str())
+                && first_elem == target_id
+            {
+                return Some(child);
             }
             // Recursively search deeper if necessary
             if let Some(found) = find_array_by_string_id(child, target_id) {
@@ -60,7 +59,7 @@ fn find_array_by_string_id<'a>(root: &'a Value, target_id: &str) -> Option<&'a V
 /// unnamed JSON array (commonly referred to as `ds:5` in scraping tooling,
 /// hence the parameter name). Because the array has no keys, every field is
 /// extracted by walking a fixed sequence of indices (a "path") into that
-/// structure via [`get_json_val`].
+/// structure via `get_json_val` (an internal helper in the `parser` module).
 ///
 /// This function is the single source of truth for how each `AppDetails`
 /// field maps to its corresponding path in the raw payload. If Google changes
@@ -180,10 +179,10 @@ pub fn map_app_details(app_id: &str, ds5: &Value) -> AppDetails {
 
     if let Some(arr) = get_val(&[1, 2, 51, 1]).and_then(|v| v.as_array()) {
         for i in 1..=5 {
-            if let Some(star_data) = arr.get(i) {
-                if let Some(count) = star_data.get(1).and_then(|c| c.as_u64()) {
-                    app.histogram.insert(i.to_string(), count);
-                }
+            if let Some(star_data) = arr.get(i)
+                && let Some(count) = star_data.get(1).and_then(|c| c.as_u64())
+            {
+                app.histogram.insert(i.to_string(), count);
             }
         }
     }
@@ -218,12 +217,12 @@ pub fn map_app_details(app_id: &str, ds5: &Value) -> AppDetails {
 
     if let Some(cat_arr) = get_val(&[1, 2, 118]).and_then(|v| v.as_array()) {
         for c in cat_arr {
-            if let Some(c_arr) = c.as_array() {
-                if c_arr.len() >= 4 {
-                    let name = c_arr[0].as_str().unwrap_or_default().to_string();
-                    let id = c_arr[2].as_str().map(|s| s.to_string());
-                    app.categories.push(Category { name, id });
-                }
+            if let Some(c_arr) = c.as_array()
+                && c_arr.len() >= 4
+            {
+                let name = c_arr[0].as_str().unwrap_or_default().to_string();
+                let id = c_arr[2].as_str().map(|s| s.to_string());
+                app.categories.push(Category { name, id });
             }
         }
     }
@@ -284,7 +283,7 @@ pub fn map_app_details(app_id: &str, ds5: &Value) -> AppDetails {
                 .and_then(|v| v.as_array())
                 .and_then(|arr| arr.get(1))
                 .and_then(|v| v.as_array())
-                .and_then(|arr| arr.get(0))
+                .and_then(|arr| arr.first())
                 .and_then(|v| v.as_u64())
         })
         .map(|ts| ts * 1000)

@@ -78,10 +78,10 @@ fn find_reviews_list(root: &Value) -> Option<&Vec<Value>> {
 
             if let Some(first_item) = arr[0].as_array()
                 && let Some(id_str) = first_item.first().and_then(|v| v.as_str())
+                && id_str.len() >= 32
+                && id_str.contains('-')
             {
-                if id_str.len() >= 32 && id_str.contains('-') {
-                    return Some(arr);
-                }
+                return Some(arr);
             }
         }
         // Not a match at this level — recurse into children.
@@ -154,14 +154,14 @@ fn find_pagination_token(root: &Value) -> Option<String> {
 /// | Index | Field                          |
 /// |-------|--------------------------------|
 /// | 0     | Review ID (UUID)                |
-/// | 1[0]  | User name                       |
-/// | 1[1][3][2] | User avatar image URL      |
+/// | 1\[0\]  | User name                       |
+/// | 1\[1\]\[3\]\[2\] | User avatar image URL      |
 /// | 2     | Star rating (score)             |
 /// | 4     | Review text                     |
-/// | 5[0]  | Review date (Unix timestamp)     |
+/// | 5\[0\]  | Review date (Unix timestamp)     |
 /// | 6     | Thumbs-up (helpful) count        |
-/// | 7[1]  | Developer reply text (if any)    |
-/// | 7[2][0] | Developer reply date (if any)  |
+/// | 7\[1\]  | Developer reply text (if any)    |
+/// | 7\[2\]\[0\] | Developer reply date (if any)  |
 /// | 10    | App version the review was left on |
 ///
 /// Any field that is missing or of an unexpected type falls back to a

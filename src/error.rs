@@ -16,20 +16,19 @@ pub enum ScraperError {
     Network(#[from] reqwest::Error),
 
     /// The response was received successfully, but its HTML or JSON
-    /// structure did not match what the parser expected (e.g.
-    /// [`crate::parser::extract_init_data`] found no matching
-    /// `AF_initDataCallback` block, or
-    /// [`crate::parser::parse_batchexecute_response`] could not unwrap
-    /// the nested payload). This usually means Google has changed the
-    /// page/response format since this crate was last updated, rather
-    /// than an issue with the request itself.
+    /// structure did not match what the parser expected (e.g. the internal
+    /// `extract_init_data` helper found no matching `AF_initDataCallback`
+    /// block, or `parse_batchexecute_response` could not unwrap the nested
+    /// payload). This usually means Google has changed the page/response
+    /// format since this crate was last updated, rather than an issue with
+    /// the request itself.
     #[error("Failed to parse HTML structure")]
     ParseError,
 
     /// The requested app could not be found. Returned when the Play
     /// Store responds with `404` for [`crate::details::get_app_details`],
-    /// or with a non-success status for a reviews request (see
-    /// [`crate::client::fetch_batchexecute`], which currently maps any
+    /// or with a non-success status for a reviews request (see the
+    /// internal `fetch_batchexecute` helper, which currently maps any
     /// non-2xx response to this variant — so in the reviews case this can
     /// also indicate a rejected/rate-limited request rather than strictly
     /// "not found").

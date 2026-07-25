@@ -31,8 +31,8 @@
 //!
 //! - [`details`]: fetches and parses an app's details page into
 //!   [`AppDetails`].
-//! - [`reviews`]: fetches and parses paginated user reviews into
-//!   [`ReviewsResult`].
+//! - [`get_reviews`]: fetches and parses paginated user reviews into
+//!   [`ReviewsResult`]. Also accessible via [`reviews::get_reviews`].
 //! - [`models`]: the data structures returned by this crate
 //!   ([`AppDetails`], [`Review`], [`ReviewsResult`], [`SortType`], etc.).
 //! - [`error`]: the [`ScraperError`] type returned by fallible operations.
@@ -66,4 +66,4 @@ pub mod reviews;
 pub use details::*;
 pub use error::ScraperError;
 pub use models::{AppDetails, Review, ReviewsResult, SortType};
-pub use reviews::get_reviews as reviews;
+pub use reviews::get_reviews;
