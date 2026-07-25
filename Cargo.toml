@@ -1,20 +1,30 @@
 [package]
 name = "google-play-scraper-rs"
 version = "0.1.0"
+authors= ["LQC <lecan15391@gmail.com>"]
+
 edition = "2024"
-description = "A crate for google play data scraper"
+description = "A fast and robust Google Play Store scraper written in Rust. Scrapes app details and reviews."
 license = "MIT"
 repository = "https://github.com/eoqci/google-play-scraper-rs"
 readme = "README.md"
 keywords = ["google-play-scraper", "google-play"]
+categories = ["api-bindings"]
+
+
+exclude = [
+    ".gitignore",
+    ".github/",
+    "tests/data/*"
+]
 
 [dependencies]
-reqwest = { version = "0.12", features = ["json", "rustls-tls", "cookies"] }
+reqwest = { version = "0.13.4", features = ["json",  "cookies"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "1.0"
-regex = "1.10"
+serde_json = "1.0.151"
+thiserror = "2.0.19"
+regex = "1.13.1"
 url = "2.5.8"
 scraper = "0.27.0"
 urlencoding = "2.1.3"

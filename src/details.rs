@@ -22,7 +22,7 @@ fn strip_html(html: &str) -> String {
 }
 
 fn find_array_by_string_id<'a>(root: &'a Value, target_id: &str) -> Option<&'a Value> {
-    // Trường hợp 1: Dữ liệu nằm trong mảng các cặp hoặc mảng con thông thường
+    // Case 1: Data is in a vec of pairs or a regular subvec
     if let Some(arr) = root.as_array() {
         for child in arr {
             if let Some(child_arr) = child.as_array() {
@@ -32,13 +32,13 @@ fn find_array_by_string_id<'a>(root: &'a Value, target_id: &str) -> Option<&'a V
                     }
                 }
             }
-            // Đệ quy tìm sâu hơn nếu cần
+            // Recursively search deeper if necessary
             if let Some(found) = find_array_by_string_id(child, target_id) {
                 return Some(found);
             }
         }
     }
-    // Trường hợp 2: Dữ liệu là JSON Object (như cấu trúc block bạn vừa gửi: {"141": [...], "146": [...]})
+    // In case The data is a JSON object (like the block structure {"141": [...], "146": [...]})
     else if let Some(obj) = root.as_object() {
         if let Some(val) = obj.get(target_id) {
             return Some(val);
@@ -302,43 +302,3 @@ pub async fn get_app_details(app_id: &str) -> Result<AppDetails, ScraperError> {
 
     Ok(app)
 }
-// // Hàm quét thông minh tìm chuỗi phiên bản trong cấu trúc rác của các app lớn
-// fn find_version_fallback(root: &Value) -> Option<String> {
-//     if let Some(arr) = root
-//         .get(1)
-//         .and_then(|v| v.get(2))
-//         .and_then(|v| v.as_array())
-//     {
-//         for item in arr {
-//             if let Some(s) = item.as_str() {
-//                 // Điều kiện nhận diện một chuỗi version: chứa dấu chấm, có số, ngắn gọn, không phải URL hay text dài
-//                 if s.contains('.')
-//                     && s.chars().any(|c| c.is_ascii_digit())
-//                     && s.len() < 35
-//                     && !s.contains("http")
-//                     && !s.contains(' ')
-//                     && !s.contains('<')
-//                 {
-//                     return Some(s.to_string());
-//                 }
-//             }
-//             // Quét sâu hơn vào các mảng con cấp 1
-//             if let Some(sub_arr) = item.as_array() {
-//                 for sub_item in sub_arr {
-//                     if let Some(s) = sub_item.as_str() {
-//                         if s.contains('.')
-//                             && s.chars().any(|c| c.is_ascii_digit())
-//                             && s.len() < 35
-//                             && !s.contains("http")
-//                             && !s.contains(' ')
-//                             && !s.contains('/')
-//                         {
-//                             return Some(s.to_string());
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }
-//     None
-// }
