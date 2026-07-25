@@ -161,4 +161,4 @@ Issues and pull requests are welcome. If you find a field that stopped parsing c
 
 Licensed under either of
 
-- MIT license ([LICENSE-MIT](LICENSE-MIT))
+- [MIT LICENSE](https://github.com/eoqci/google-play-scraper-rs/blob/main/LICENSE)
