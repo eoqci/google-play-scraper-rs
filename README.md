@@ -160,4 +160,3 @@ Issues and pull requests are welcome. If you find a field that stopped parsing c
 Licensed under either of
 
 - MIT license ([LICENSE-MIT](LICENSE-MIT))
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
