@@ -94,7 +94,6 @@ pub struct Review {
     pub version: Option<String>,
     pub thumbs_up: u64,
     // Criterias (ví dụ: Gameplay: 5 sao, Đồ họa: 4 sao) có thể bỏ qua cho gọn,
-    // hoặc bạn tự thêm field nếu cần.
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -104,7 +103,6 @@ pub struct ReviewsResult {
     pub next_pagination_token: Option<String>,
 }
 
-// Khai báo enum cho kiểu sort (giống constant.js)
 pub enum SortType {
     Newest = 2,
     Rating = 3,

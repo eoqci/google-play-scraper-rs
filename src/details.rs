@@ -52,6 +52,73 @@ fn find_array_by_string_id<'a>(root: &'a Value, target_id: &str) -> Option<&'a V
     None
 }
 
+/// Parses raw Google Play Store data (`ds5`) into a structured [`AppDetails`] object.
+///
+/// # Background
+///
+/// Google Play's app detail page embeds its data as a large, deeply nested,
+/// unnamed JSON array (commonly referred to as `ds:5` in scraping tooling,
+/// hence the parameter name). Because the array has no keys, every field is
+/// extracted by walking a fixed sequence of indices (a "path") into that
+/// structure via [`get_json_val`].
+///
+/// This function is the single source of truth for how each `AppDetails`
+/// field maps to its corresponding path in the raw payload. If Google changes
+/// the shape of this payload, this is the function that needs to be updated.
+///
+/// # Parameters
+/// - `app_id`: The package name of the app (e.g. `"com.miHoYo.GenshinImpact"`).
+///   Used to populate `app.app_id` and to build the canonical Play Store URL.
+/// - `ds5`: The raw JSON value containing the scraped Play Store data blob.
+///
+/// # Returns
+/// A fully populated [`AppDetails`] struct. Fields that cannot be found at
+/// their expected path fall back to sensible defaults (empty string, `0`,
+/// `false`, or `"Varies with device"` depending on the field), so this
+/// function never fails — it degrades gracefully instead of returning
+/// `Option`/`Result`.
+///
+/// # Extraction strategy
+///
+/// Internally, several local closures are used to reduce boilerplate when
+/// reading from the nested JSON:
+/// - `get_val`: raw [`Value`] lookup at a given index path.
+/// - `get_str` / `get_f64` / `get_u64`: typed lookups with automatic
+///   numeric coercion (Play Store sometimes encodes numbers as either
+///   JSON integers or floats depending on the field).
+/// - `is_truthy`: treats empty arrays/strings/objects and `0`/`false` as
+///   "falsy", mirroring how Play Store encodes optional/boolean flags.
+///
+/// Most fields (title, description, install counts, ratings, pricing,
+/// developer info, categories, media assets, content rating, etc.) are
+/// read directly from fixed paths under `ds5[1][2][...]`.
+///
+/// # Fallback lookup ("index-independent" fields)
+///
+/// A subset of fields — `updated`, `version`, `android_version`,
+/// `android_version_text`, `android_max_version`, and `recent_changes` — are
+/// **not** guaranteed to live at a fixed index. Their position can shift
+/// depending on the app (e.g. apps with additional metadata blocks, or
+/// multi-APK / multi-device support). For these fields, the function first
+/// tries the commonly-observed fixed path, and if that fails or returns a
+/// known placeholder value (`"VARY"` / `"Varies with device"`), it falls
+/// back to [`find_array_by_string_id`], which scans `ds5` for a sub-array
+/// tagged with a known internal string ID (e.g. `"141"` for version info,
+/// `"145"` for changelog, `"146"` for last-updated timestamp) and extracts
+/// the value relative to that anchor instead of an absolute index.
+///
+/// This two-tier approach (fixed path first, ID-based scan as fallback)
+/// keeps parsing fast for the common case while remaining resilient for
+/// apps whose payload layout deviates from the norm.
+///
+/// # Notes / known limitations
+/// - `editors_choice` is currently hardcoded to `false` — no reliable path
+///   has been identified for this field yet.
+/// - `developer_internal_id` is currently just a clone of `developer_id`;
+///   if Play Store exposes a distinct internal developer ID at some path,
+///   this should be updated.
+/// - Timestamps (`app.updated`) are converted from seconds to milliseconds
+///   (`ts * 1000`) to match the expected unit in [`AppDetails`].
 pub fn map_app_details(app_id: &str, ds5: &Value) -> AppDetails {
     let mut app = AppDetails::default();
     app.app_id = app_id.to_string();

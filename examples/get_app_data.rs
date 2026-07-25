@@ -14,7 +14,7 @@ struct ExportData {
     pub reviews: ReviewsResult,
 }
 
-const APP_ID: &str = "com.miHoYo.GenshinImpact";
+const APP_ID: &str = "com.shopee.vn";
 
 #[tokio::main]
 async fn main() {
