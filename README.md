@@ -1,13 +1,15 @@
 <h1 align="center"> GOOGLE PLAY SCRAPER </h1>
-<p align="center">A Rust crate for extracting and filtering application data from Google Play.</p>
-
-# google-play-scraper-rs
-
-A Rust crate for extracting and filtering application data from Google Play.
-
+<div align="center">
+    
 [![Crates.io](https://img.shields.io/crates/v/google_play_scraper_rs.svg)](https://crates.io/crates/google_play_scraper_rs)
 [![Documentation](https://docs.rs/google_play_scraper_rs/badge.svg)](https://docs.rs/google_play_scraper_rs)
 [![License](https://img.shields.io/crates/l/google_play_scraper_rs.svg)](LICENSE)
+
+</div>
+<p align="center">A Rust crate for extracting and filtering application data from Google Play.</p>
+
+
+
 
 ## Overview
 
