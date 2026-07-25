@@ -1,10 +1,10 @@
 [package]
-name = "googleplay-scraper-rs"
+name = "google-play-scraper-rs"
 version = "0.1.0"
 edition = "2024"
 description = "A crate for google play data scraper"
 license = "MIT"
-repository = "https://github.com/eoqci/googleplay-scraper-rs"
+repository = "https://github.com/eoqci/google-play-scraper-rs"
 readme = "README.md"
 keywords = ["google-play-scraper", "google-play"]
 
