@@ -1,8 +1,12 @@
-pub mod client;
 pub mod details;
 pub mod error;
 pub mod models;
-pub mod parser;
 pub mod reviews;
 
-// pub use parser::debug_raw_app_data;
+mod client;
+mod parser;
+
+pub use details::*;
+pub use error::ScraperError;
+pub use models::{AppDetails, Review, ReviewsResult, SortType};
+pub use reviews::get_reviews as reviews;
