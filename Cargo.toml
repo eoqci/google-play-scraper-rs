@@ -1,6 +1,6 @@
 [package]
 name = "google-play-scraper-rs"
-version = "0.1.1"
+version = "0.1.2"
 authors= ["LQC <lecan15391@gmail.com>"]
 edition = "2024"
 description = "A fast and robust Google Play Store scraper written in Rust. Scrapes app details and reviews."
