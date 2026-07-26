@@ -28,7 +28,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-google_play_scraper_rs = "0.1"
+google-play-scraper-rs = "0.1"
 tokio = { version = "1", features = ["full"] }
 serde_json = "1"
 ```
@@ -36,7 +36,7 @@ serde_json = "1"
 Or install via cargo:
 
 ```bash
-cargo add google_play_scraper_rs
+cargo add google-play-scraper-rs
 ```
 
 ## Quick Start
