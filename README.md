@@ -1,7 +1,7 @@
 <h1 align="center"> GOOGLE PLAY SCRAPER </h1>
 <div align="center">
     
-[![Crates.io](https://img.shields.io/crates/v/google_play_scraper_rs.svg)](https://crates.io/crates/google_play_scraper_rs)
+[![Crates.io](https://img.shields.io/crates/v/google_play_scraper_rs.svg)](https://crates.io/crates/google-play-scraper-rs)
 [![Documentation](https://docs.rs/google-play-scraper-rs/badge.svg)](https://docs.rs/google-play-scraper-rs)
 [![License](https://img.shields.io/crates/l/google_play_scraper_rs.svg)](LICENSE)
 
